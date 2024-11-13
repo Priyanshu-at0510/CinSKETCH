@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  username     String     @unique
+  email        String     @unique
+  passwordHash String
+  avatarUrl    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  gameRooms    GameRoom[] @relation("OwnedRooms")
+  joinedRooms  Player[]
+  guesses      Guess[]
+  sessionGuess SessionGuess[]
+
+  GameSession GameSession[] @relation("SessionDrawer")
+}
+
+enum StatusType {
+  ACTIVE
+  COMPLETED
+}
+
+model GameRoom {
+  id        String     @id @default(uuid())
+  name      String
+  ownerId   String
+  profile   User       @relation("OwnedRooms", fields: [ownerId], references: [id], onDelete: Cascade)
+  status    StatusType @default(ACTIVE) // e.g., "active", "completed"
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  players   Player[]
+  guesses   Guess[]
+  usedMovies GameMovie[]
+
+
+  @@index([ownerId])
+  GameSession GameSession[]
+}
+
+model Player {
+  id        String     @id @default(uuid())
+  userId    String
+  gameRoomId String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameRoom  GameRoom   @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime   @default(now())
+
+  @@unique([userId, gameRoomId])
+  PlayerSession PlayerSession[]
+}
+
+model Guess {
+  id        String     @id @default(uuid())
+  content   String
+  userId    String
+  gameRoomId String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameRoom  GameRoom   @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@index([userId])
+  @@index([gameRoomId])
+}
+
+model Movie {
+  id          String   @id @default(uuid())
+  title       String   @unique
+  releaseYear Int
+  genre       String[]
+  director    String
+  difficulty  Difficulty
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  usedInGames GameMovie[]
+
+  GameSession GameSession[]
+}
+
+model GameMovie {
+  id        String   @id @default(uuid())
+  movieId   String
+  gameRoomId String
+  movie     Movie    @relation(fields: [movieId], references: [id])
+  gameRoom  GameRoom @relation(fields: [gameRoomId], references: [id])
+  usedAt    DateTime @default(now())
+  wasGuessed Boolean @default(false)
+
+  @@unique([movieId, gameRoomId])
+}
+
+
+model GameSession {
+  id            String    @id @default(uuid())
+  gameRoomId    String
+  gameRoom      GameRoom  @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  currentMovieId String?
+  currentMovie  Movie?    @relation(fields: [currentMovieId], references: [id])
+  drawerId      String
+  drawer        User      @relation("SessionDrawer", fields: [drawerId], references: [id])
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+  status        SessionStatus @default(IN_PROGRESS)
+  roundNumber   Int
+  sessionGuess    SessionGuess[]
+  playerSessions PlayerSession[]
+
+  @@index([gameRoomId])
+  @@index([drawerId])
+}
+
+model SessionGuess{
+  id  String  @id @default(uuid())
+  content String
+  userId  String
+  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String
+  session GameSession @relation(fields: [sessionId],references: [id],onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+
+
+}
+
+model PlayerSession {
+  id            String    @id @default(uuid())
+  playerId      String
+  player        Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  gameSessionId String
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+  scoreEarned   Int       @default(0)
+
+  @@unique([playerId, gameSessionId])
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
